@@ -1,0 +1,113 @@
+---
+title: 'Project Assignment #1 - Reproducible Research'
+output: html_document
+This is the project assignment for Data science course: reproducible resuearch. 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+First, the following codes will unzip the activity data and read them in a dataframe:Act. Transform the date into date formate
+
+```{r, results='hide'}
+library(lubridate)
+unzip("activity.zip")
+Act <- read.csv("./activity.csv")
+Act$date <- ymd(Act$date)
+```
+
+Sum the total steps each day by groub_by function and summarise function. The new datatable was saved in Act_stepsum. A histogram was plotted for Act_stepsum
+
+```{r}
+library(dplyr)
+Act_stepsum <- summarise(group_by(Act, date), steps = sum(steps, na.rm = T))
+with(Act_stepsum, hist(steps, breaks = seq(from=0, to=25000, by=2500), xlab = "total steps", ylab = "number of days", main = "Histogram of total number of steps taken each day", col = "blue"))
+```
+
+Next step, I will calculate the mean and median number of steps taken each day and store them in Act_steps_mean and Act_steps_median
+
+```{r}
+Act_steps_mean <- round(mean(Act_stepsum$steps, na.rm = TRUE))
+Act_steps_median <- median(Act_stepsum$steps)
+print(paste("the mean of daily steps is", Act_steps_mean))
+print(paste("the median of daily steps is", Act_steps_median))
+```
+
+Then we will plot the average of steps taken in the interval
+```{r}
+library(ggplot2)
+Act_steps_avg <- summarise(group_by(Act, interval), steps = mean(steps, na.rm = TRUE))
+ggplot(data = Act_steps_avg, aes(x = interval, y = steps))+
+        geom_line()+
+        xlab("5 minutes interval")+
+        ylab("averaged steps")+
+        ggtitle("Time series: averaged steps in 5 minutes interval")
+```
+
+Then we will find out the maximum number of steps and the interval
+```{r}
+max_index <- which.max(Act_steps_avg$steps)
+max_interval <- Act_steps_avg[max_index, 1]
+max_steps <- round(Act_steps_avg[max_index, 2])
+print(paste("the max interval happens at", max_interval))
+print(paste("the max steps is", max_steps))
+```
+
+We will umpute the missing value in the dataset
+```{r}
+Total_NA <- sum(is.na(Act$steps))
+print(paste("the total missing rows are", Total_NA))
+Act <- mutate(Act, steps_fillNA = steps)
+
+#the following codes used average steps per interval to replace the NA, stored in a new column called "steps_fillNA"
+
+for (i in 1:nrow(Act)){
+        if (is.na(Act[i,4])){
+                Act[i,4] <- Act_steps_avg[Act_steps_avg$interval == Act[i,3],2]
+        }
+}
+print(paste("the total NA after imputing is", sum(is.na(Act$steps_fillNA))))
+
+#generating the new sums/mean/median
+
+library(gridExtra)
+Act_stepsum_new <- summarise(group_by(Act, date), steps = sum(steps_fillNA))
+plot1 <- qplot(Act_stepsum$steps, binwidth = 1000, ylim = c(0,15), main = "original", xlab = "total steps taken each day")
+plot2 <- qplot(Act_stepsum_new$steps, binwidth = 1000, ylim = c(0,15), main = "After imputing NAs", xlab = "total steps taken each day")
+grid.arrange(plot1, plot2, ncol = 2)
+
+#computing the new mean and median
+mean_new <- round(mean(Act_stepsum_new$steps))
+median_new <- round(median(Act_stepsum_new$steps))
+print(paste("the new mean is", mean_new))
+print(paste("the new median is", median_new))
+```
+
+Next let's compare the average steps taken per 5-minutes interval between weekdays and weekends
+```{r}
+#first let's separate the workdays and weekends
+weekends <- c("Saturday", "Sunday")
+Act_workdays <- filter(Act, weekdays(date) != weekends)
+Act_weekends <- filter(Act, weekdays(date) == weekends)
+#Then we will calculate the average steps at each interval
+Act_workdays_avg <- summarise(group_by(Act_workdays, interval), steps = mean(steps_fillNA))
+Act_weekends_avg <- summarise(group_by(Act_weekends, interval), steps = mean(steps_fillNA))
+#next we will plot the time series for each of them
+plot1 <- ggplot(data = Act_workdays_avg, aes(x = interval, y = steps))+
+        geom_line()+
+        ylim(0,250)+
+        ggtitle("Averaged steps in workdays")+
+        xlab("5 minutes interval")+
+        ylab("averaged steps")
+plot2 <- ggplot(data = Act_weekends_avg, aes(x = interval, y = steps))+
+        geom_line()+
+        ylim(0,250)+
+        ggtitle("Averaged steps in weekends")+
+        xlab("5 minutes interval")+
+        ylab("averaged steps")
+grid.arrange(plot1, plot2, ncol = 2)
+```
+
